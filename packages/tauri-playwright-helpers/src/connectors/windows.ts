@@ -98,8 +98,8 @@ export class WindowsConnector implements Connector {
       const pages = context.pages();
 
       if (pages.length === 0) {
-        // Wait for a page to be created
-        page = await context.waitForEvent('page', { timeout: 5000 });
+        // Wait for a page to be created - use the same timeout as launch
+        page = await context.waitForEvent('page', { timeout });
       } else {
         page = pages[0];
       }

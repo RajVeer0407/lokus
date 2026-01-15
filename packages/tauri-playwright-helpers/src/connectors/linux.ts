@@ -163,6 +163,7 @@ export class LinuxConnector implements Connector {
     };
 
     const driver = await new Builder()
+      .forBrowser('wry') // Tauri uses wry WebView
       .usingServer(`http://localhost:${port}`)
       .withCapabilities(capabilities)
       .build();
