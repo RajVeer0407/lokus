@@ -1,0 +1,44 @@
+{
+  "name": "tauri-playwright-helpers",
+  "version": "0.1.0",
+  "description": "E2E testing helpers for Tauri applications with Playwright-compatible API",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "tauri",
+    "playwright",
+    "e2e",
+    "testing",
+    "webdriver",
+    "automation"
+  ],
+  "author": "Lokus",
+  "license": "MIT",
+  "dependencies": {
+    "selenium-webdriver": "^4.27.0",
+    "tree-kill": "^1.2.2"
+  },
+  "peerDependencies": {
+    "@playwright/test": ">=1.40.0",
+    "playwright": ">=1.40.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/selenium-webdriver": "^4.1.28",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
+  }
+}
