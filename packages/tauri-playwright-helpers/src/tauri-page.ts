@@ -8,6 +8,64 @@ import type { PageLike, ClickOptions, WaitOptions, ScreenshotOptions } from './t
 const DEFAULT_TIMEOUT = 30000;
 
 /**
+ * Convert Playwright-style selectors to WebDriver-compatible selectors.
+ * Returns { strategy, value } for use with WebDriver.
+ *
+ * Supported Playwright selectors:
+ * - `text=...` -> XPath contains text
+ * - `button:has-text("...")` -> XPath button with text
+ * - `:has-text("...")` -> XPath element with text
+ * - CSS selectors (passed through)
+ */
+function translateSelector(selector: string): { by: typeof By; locator: ReturnType<typeof By.css> } {
+  // Handle text= selector
+  if (selector.startsWith('text=')) {
+    const text = selector.slice(5);
+    // XPath that finds elements containing the text
+    return {
+      by: By,
+      locator: By.xpath(`//*[contains(text(), '${text}') or contains(., '${text}')]`),
+    };
+  }
+
+  // Handle :has-text() pseudo-selector
+  const hasTextMatch = selector.match(/^(.+?):has-text\("([^"]+)"\)$/);
+  if (hasTextMatch) {
+    const [, tagOrSelector, text] = hasTextMatch;
+    const tag = tagOrSelector.trim() || '*';
+    // For simple tags like 'button', 'div', etc.
+    if (/^[a-zA-Z]+$/.test(tag)) {
+      return {
+        by: By,
+        locator: By.xpath(`//${tag}[contains(text(), '${text}') or contains(., '${text}')]`),
+      };
+    }
+    // For more complex selectors, fall back to CSS + JavaScript filtering
+    // This is a simplified approach
+    return {
+      by: By,
+      locator: By.xpath(`//*[contains(text(), '${text}') or contains(., '${text}')]`),
+    };
+  }
+
+  // Handle comma-separated selectors (multiple selectors)
+  if (selector.includes(',')) {
+    // For WebDriver, we'll use CSS selector as-is and let it handle multiple
+    // Note: This may not work perfectly for all cases
+    return {
+      by: By,
+      locator: By.css(selector.split(',')[0].trim()), // Use first selector
+    };
+  }
+
+  // Default: treat as CSS selector
+  return {
+    by: By,
+    locator: By.css(selector),
+  };
+}
+
+/**
  * Type guard to check if the inner page is a Playwright Page
  */
 function isPlaywrightPage(inner: PageLike): inner is Page {
@@ -61,7 +119,8 @@ export class TauriLocator {
         await locator.click(options);
       }
     } else if (mode === 'webdriver' && isWebDriver(inner)) {
-      const elements = await inner.findElements(By.css(this.selector));
+      const { locator } = translateSelector(this.selector);
+      const elements = await inner.findElements(locator);
       const index = this.nthIndex ?? 0;
       if (elements.length <= index) {
         throw new Error(`Element not found: ${this.selector} at index ${index}`);
@@ -92,7 +151,8 @@ export class TauriLocator {
         await locator.fill(value);
       }
     } else if (mode === 'webdriver' && isWebDriver(inner)) {
-      const elements = await inner.findElements(By.css(this.selector));
+      const { locator } = translateSelector(this.selector);
+      const elements = await inner.findElements(locator);
       const index = this.nthIndex ?? 0;
       if (elements.length <= index) {
         throw new Error(`Element not found: ${this.selector} at index ${index}`);
@@ -117,7 +177,8 @@ export class TauriLocator {
       }
       return await locator.innerText();
     } else if (mode === 'webdriver' && isWebDriver(inner)) {
-      const elements = await inner.findElements(By.css(this.selector));
+      const { locator } = translateSelector(this.selector);
+      const elements = await inner.findElements(locator);
       const index = this.nthIndex ?? 0;
       if (elements.length <= index) {
         throw new Error(`Element not found: ${this.selector} at index ${index}`);
@@ -142,7 +203,8 @@ export class TauriLocator {
       }
       return await locator.textContent();
     } else if (mode === 'webdriver' && isWebDriver(inner)) {
-      const elements = await inner.findElements(By.css(this.selector));
+      const { locator } = translateSelector(this.selector);
+      const elements = await inner.findElements(locator);
       const index = this.nthIndex ?? 0;
       if (elements.length <= index) {
         return null;
@@ -173,7 +235,8 @@ export class TauriLocator {
       return await locator.isVisible();
     } else if (mode === 'webdriver' && isWebDriver(inner)) {
       try {
-        const elements = await inner.findElements(By.css(this.selector));
+        const { locator } = translateSelector(this.selector);
+        const elements = await inner.findElements(locator);
         const index = this.nthIndex ?? 0;
         if (elements.length <= index) {
           return false;
@@ -197,7 +260,8 @@ export class TauriLocator {
     if (mode === 'cdp' && isPlaywrightPage(inner)) {
       return await inner.locator(this.selector).count();
     } else if (mode === 'webdriver' && isWebDriver(inner)) {
-      const elements = await inner.findElements(By.css(this.selector));
+      const { locator } = translateSelector(this.selector);
+      const elements = await inner.findElements(locator);
       return elements.length;
     }
     throw new Error('Invalid page mode');
@@ -289,8 +353,9 @@ export class TauriPage {
       await this.inner.click(selector, options);
     } else if (this.mode === 'webdriver' && isWebDriver(this.inner)) {
       const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
-      await this.inner.wait(until.elementLocated(By.css(selector)), timeout);
-      const element = await this.inner.findElement(By.css(selector));
+      const { locator } = translateSelector(selector);
+      await this.inner.wait(until.elementLocated(locator), timeout);
+      const element = await this.inner.findElement(locator);
 
       if (options?.delay) {
         const actions = this.inner.actions({ async: true });
@@ -308,7 +373,8 @@ export class TauriPage {
     if (this.mode === 'cdp' && isPlaywrightPage(this.inner)) {
       await this.inner.fill(selector, value);
     } else if (this.mode === 'webdriver' && isWebDriver(this.inner)) {
-      const element = await this.inner.findElement(By.css(selector));
+      const { locator } = translateSelector(selector);
+      const element = await this.inner.findElement(locator);
       await element.clear();
       await element.sendKeys(value);
     }
@@ -321,7 +387,8 @@ export class TauriPage {
     if (this.mode === 'cdp' && isPlaywrightPage(this.inner)) {
       await this.inner.type(selector, text, options);
     } else if (this.mode === 'webdriver' && isWebDriver(this.inner)) {
-      const element = await this.inner.findElement(By.css(selector));
+      const { locator } = translateSelector(selector);
+      const element = await this.inner.findElement(locator);
       const delay = options?.delay ?? 0;
 
       if (delay > 0) {
@@ -346,21 +413,22 @@ export class TauriPage {
     if (this.mode === 'cdp' && isPlaywrightPage(this.inner)) {
       await this.inner.waitForSelector(selector, { timeout, state });
     } else if (this.mode === 'webdriver' && isWebDriver(this.inner)) {
+      const { locator } = translateSelector(selector);
       switch (state) {
         case 'attached':
-          await this.inner.wait(until.elementLocated(By.css(selector)), timeout);
+          await this.inner.wait(until.elementLocated(locator), timeout);
           break;
         case 'detached':
-          await this.inner.wait(until.stalenessOf(await this.inner.findElement(By.css(selector))), timeout);
+          await this.inner.wait(until.stalenessOf(await this.inner.findElement(locator)), timeout);
           break;
         case 'visible':
-          await this.inner.wait(until.elementLocated(By.css(selector)), timeout);
-          const element = await this.inner.findElement(By.css(selector));
+          await this.inner.wait(until.elementLocated(locator), timeout);
+          const element = await this.inner.findElement(locator);
           await this.inner.wait(until.elementIsVisible(element), timeout);
           break;
         case 'hidden':
           try {
-            const el = await this.inner.findElement(By.css(selector));
+            const el = await this.inner.findElement(locator);
             await this.inner.wait(until.elementIsNotVisible(el), timeout);
           } catch {
             // Element not found means it's hidden
