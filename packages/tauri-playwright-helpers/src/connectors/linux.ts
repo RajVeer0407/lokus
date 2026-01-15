@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { Builder, type WebDriver } from 'selenium-webdriver';
+import { Builder, Capabilities, type WebDriver } from 'selenium-webdriver';
 import treeKill from 'tree-kill';
-import type { Connector, LaunchOptions, ConnectionInfo, PageLike } from '../types';
+import type { Connector, LaunchOptions, ConnectionInfo, PageLike } from '../types.js';
 
 /**
  * Default port for tauri-driver WebDriver server
@@ -154,16 +154,16 @@ export class LinuxConnector implements Connector {
     port: number,
     options: LaunchOptions
   ): Promise<WebDriver> {
-    const capabilities = {
-      'tauri:options': {
-        application: options.binary,
-        ...(options.args && { args: options.args }),
-        ...(options.env && { env: options.env }),
-      },
-    };
+    // Create capabilities properly for tauri-driver
+    const capabilities = new Capabilities();
+    capabilities.setBrowserName('wry');
+    capabilities.set('tauri:options', {
+      application: options.binary,
+      ...(options.args && { args: options.args }),
+      ...(options.env && { env: options.env }),
+    });
 
     const driver = await new Builder()
-      .forBrowser('wry') // Tauri uses wry WebView
       .usingServer(`http://localhost:${port}`)
       .withCapabilities(capabilities)
       .build();
