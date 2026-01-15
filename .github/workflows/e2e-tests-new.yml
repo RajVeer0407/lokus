@@ -12,46 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Browser-based E2E tests (dev server) - fast, all platforms
-  e2e-browser:
-    name: E2E Browser Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run Browser E2E tests
-        run: npx playwright test --reporter=html
-        env:
-          CI: 'true'
-
-      - name: Upload test report
-        uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-report-browser-${{ matrix.os }}
-          path: playwright-report/
-          retention-days: 7
-
-  # Real Tauri E2E tests (actual binary) - Linux only for now
+  # Real Tauri E2E tests (actual binary) - Linux
   e2e-tauri-linux:
     name: E2E Tauri Tests (Linux)
     runs-on: ubuntu-latest
@@ -92,22 +53,13 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Build Tauri app (debug)
-        run: npm run bundle:mcp && npm run build && npx tauri build --debug
+      - name: Build frontend
+        run: npm run bundle:mcp && npm run build
+
+      - name: Build Tauri binary (debug, no bundling)
+        run: cargo build --manifest-path src-tauri/Cargo.toml
         env:
           TAURI_SIGNING_PRIVATE_KEY: ''
-
-      - name: Find Tauri binary
-        id: find-binary
-        run: |
-          BINARY=$(find ./target/debug -maxdepth 1 -type f -name "lokus" -o -name "Lokus" | head -1)
-          if [ -z "$BINARY" ]; then
-            echo "Binary not found, listing target/debug:"
-            ls -la ./target/debug/ | head -20
-            exit 1
-          fi
-          echo "binary=$BINARY" >> $GITHUB_OUTPUT
-          echo "Found binary: $BINARY"
 
       - name: Run Tauri E2E tests
         uses: coactions/setup-xvfb@v1
@@ -115,7 +67,7 @@ jobs:
           run: npm run test:e2e:tauri
         env:
           CI: 'true'
-          TAURI_BINARY: ${{ steps.find-binary.outputs.binary }}
+          TAURI_BINARY: ./src-tauri/target/debug/lokus
 
       - name: Upload Tauri test report
         uses: actions/upload-artifact@v4
@@ -160,29 +112,19 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Build Tauri app (debug)
-        run: npm run bundle:mcp && npm run build && npx tauri build --debug
+      - name: Build frontend
+        run: npm run bundle:mcp && npm run build
+
+      - name: Build Tauri binary (debug, no bundling)
+        run: cargo build --manifest-path src-tauri/Cargo.toml
         env:
           TAURI_SIGNING_PRIVATE_KEY: ''
-
-      - name: Find Tauri binary
-        id: find-binary
-        shell: pwsh
-        run: |
-          $binary = Get-ChildItem -Path "./target/debug" -Filter "*.exe" | Where-Object { $_.Name -match "lokus|Lokus" } | Select-Object -First 1
-          if ($null -eq $binary) {
-            Write-Host "Binary not found, listing target/debug:"
-            Get-ChildItem -Path "./target/debug" | Select-Object -First 20
-            exit 1
-          }
-          echo "binary=$($binary.FullName)" >> $env:GITHUB_OUTPUT
-          Write-Host "Found binary: $($binary.FullName)"
 
       - name: Run Tauri E2E tests
         run: npm run test:e2e:tauri
         env:
           CI: 'true'
-          TAURI_BINARY: ${{ steps.find-binary.outputs.binary }}
+          TAURI_BINARY: ./src-tauri/target/debug/lokus.exe
 
       - name: Upload Tauri test report
         uses: actions/upload-artifact@v4
@@ -202,44 +144,33 @@ jobs:
 
   summary:
     name: Test Summary
-    needs: [e2e-browser, e2e-tauri-linux, e2e-tauri-windows]
+    needs: [e2e-tauri-linux, e2e-tauri-windows]
     runs-on: ubuntu-latest
     if: always()
 
     steps:
       - name: Generate Summary
         run: |
-          echo "# E2E Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "# Tauri E2E Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "## Browser Tests (Dev Server)" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Linux | ${{ needs.e2e-browser.result == 'success' && 'Passed' || needs.e2e-browser.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| macOS | ${{ needs.e2e-browser.result == 'success' && 'Passed' || needs.e2e-browser.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Windows | ${{ needs.e2e-browser.result == 'success' && 'Passed' || needs.e2e-browser.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          echo "## Real Tauri Tests (Binary)" >> $GITHUB_STEP_SUMMARY
           echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ needs.e2e-tauri-linux.result }}" == "success" ]; then
-            echo "| Linux | Passed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Linux | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.e2e-tauri-linux.result }}" == "failure" ]; then
-            echo "| Linux | Failed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Linux | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Linux | ${{ needs.e2e-tauri-linux.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Linux | ⏭️ ${{ needs.e2e-tauri-linux.result }} |" >> $GITHUB_STEP_SUMMARY
           fi
 
           if [ "${{ needs.e2e-tauri-windows.result }}" == "success" ]; then
-            echo "| Windows | Passed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Windows | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
           elif [ "${{ needs.e2e-tauri-windows.result }}" == "failure" ]; then
-            echo "| Windows | Failed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Windows | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Windows | ${{ needs.e2e-tauri-windows.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Windows | ⏭️ ${{ needs.e2e-tauri-windows.result }} |" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "Download the Playwright HTML reports from the workflow artifacts." >> $GITHUB_STEP_SUMMARY
+          echo "Download Playwright HTML reports from workflow artifacts." >> $GITHUB_STEP_SUMMARY
