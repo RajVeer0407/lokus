@@ -1,5 +1,5 @@
-import type { StubValue } from './types';
-import { getInterceptorScript } from './scripts/ipc-interceptor';
+import type { StubValue } from './types.js';
+import { getInterceptorScript } from './scripts/ipc-interceptor.js';
 
 /**
  * Serialized stub value for transmission to the browser context.

@@ -487,4 +487,111 @@ export class TauriPage {
       await this.inner.executeScript(script);
     }
   }
+
+  /**
+   * Keyboard interface for typing and key presses
+   */
+  get keyboard(): TauriKeyboard {
+    return new TauriKeyboard(this);
+  }
+}
+
+/**
+ * TauriKeyboard - Keyboard interface for key presses
+ */
+export class TauriKeyboard {
+  private page: TauriPage;
+
+  constructor(page: TauriPage) {
+    this.page = page;
+  }
+
+  /**
+   * Press a key or key combination
+   * @param key - Key to press (e.g., 'Enter', 'Control+k', 'Meta+a')
+   */
+  async press(key: string): Promise<void> {
+    const inner = this.page.getInner();
+    const mode = this.page.getMode();
+
+    if (mode === 'cdp' && isPlaywrightPage(inner)) {
+      await inner.keyboard.press(key);
+    } else if (mode === 'webdriver' && isWebDriver(inner)) {
+      const actions = inner.actions({ async: true });
+      const { Key } = await import('selenium-webdriver');
+
+      // Parse the key combination
+      const parts = key.split('+');
+      const modifiers: string[] = [];
+      let mainKey = parts[parts.length - 1];
+
+      for (let i = 0; i < parts.length - 1; i++) {
+        modifiers.push(parts[i].toLowerCase());
+      }
+
+      // Map key names to Selenium keys
+      const keyMap: Record<string, string> = {
+        'enter': Key.ENTER,
+        'escape': Key.ESCAPE,
+        'tab': Key.TAB,
+        'backspace': Key.BACK_SPACE,
+        'delete': Key.DELETE,
+        'arrowup': Key.ARROW_UP,
+        'arrowdown': Key.ARROW_DOWN,
+        'arrowleft': Key.ARROW_LEFT,
+        'arrowright': Key.ARROW_RIGHT,
+        'home': Key.HOME,
+        'end': Key.END,
+        'pageup': Key.PAGE_UP,
+        'pagedown': Key.PAGE_DOWN,
+        'space': Key.SPACE,
+        'control': Key.CONTROL,
+        'alt': Key.ALT,
+        'shift': Key.SHIFT,
+        'meta': Key.META,
+      };
+
+      // Press modifiers
+      for (const mod of modifiers) {
+        const modKey = keyMap[mod] || mod;
+        await actions.keyDown(modKey);
+      }
+
+      // Press main key
+      const resolvedKey = keyMap[mainKey.toLowerCase()] || mainKey;
+      await actions.keyDown(resolvedKey).keyUp(resolvedKey);
+
+      // Release modifiers in reverse order
+      for (const mod of modifiers.reverse()) {
+        const modKey = keyMap[mod] || mod;
+        await actions.keyUp(modKey);
+      }
+
+      await actions.perform();
+    }
+  }
+
+  /**
+   * Type text character by character
+   * @param text - Text to type
+   * @param options - Optional delay between keystrokes
+   */
+  async type(text: string, options?: { delay?: number }): Promise<void> {
+    const inner = this.page.getInner();
+    const mode = this.page.getMode();
+
+    if (mode === 'cdp' && isPlaywrightPage(inner)) {
+      await inner.keyboard.type(text, options);
+    } else if (mode === 'webdriver' && isWebDriver(inner)) {
+      const delay = options?.delay ?? 0;
+      const actions = inner.actions({ async: true });
+
+      for (const char of text) {
+        await actions.sendKeys(char).perform();
+        if (delay > 0) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+  }
 }
