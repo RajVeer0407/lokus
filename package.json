@@ -178,7 +178,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",
-    "tauri-playwright-helpers": "workspace:*",
+    "tauri-playwright-helpers": "*",
     "@tailwindcss/typography": "^0.5.16",
     "@tauri-apps/cli": "^2",
     "@testing-library/dom": "^10.4.1",

@@ -24,32 +24,27 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Install Playwright Browsers
-        run: pnpm exec playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Run Browser E2E tests
-        run: pnpm exec playwright test --reporter=html
+        run: npx playwright test --reporter=html
         env:
           CI: 'true'
 
       - name: Upload test report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-browser-${{ matrix.os }}
@@ -64,18 +59,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Setup Rust
         uses: dtolnay/rust-action@stable
@@ -100,10 +90,10 @@ jobs:
         run: cargo install tauri-driver
 
       - name: Install Node dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Build Tauri app (debug)
-        run: pnpm run bundle:mcp && pnpm run build && pnpm exec tauri build --debug
+        run: npm run bundle:mcp && npm run build && npx tauri build --debug
         env:
           TAURI_SIGNING_PRIVATE_KEY: ''
 
@@ -122,13 +112,13 @@ jobs:
       - name: Run Tauri E2E tests
         uses: coactions/setup-xvfb@v1
         with:
-          run: pnpm run test:e2e:tauri
+          run: npm run test:e2e:tauri
         env:
           CI: 'true'
           TAURI_BINARY: ${{ steps.find-binary.outputs.binary }}
 
       - name: Upload Tauri test report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-tauri-linux
@@ -136,7 +126,7 @@ jobs:
           retention-days: 7
 
       - name: Upload Tauri test results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: test-results-tauri-linux
@@ -151,18 +141,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
+          cache: 'npm'
 
       - name: Setup Rust
         uses: dtolnay/rust-action@stable
@@ -173,10 +158,10 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Install Node dependencies
-        run: pnpm install
+        run: npm ci
 
       - name: Build Tauri app (debug)
-        run: pnpm run bundle:mcp && pnpm run build && pnpm exec tauri build --debug
+        run: npm run bundle:mcp && npm run build && npx tauri build --debug
         env:
           TAURI_SIGNING_PRIVATE_KEY: ''
 
@@ -194,13 +179,13 @@ jobs:
           Write-Host "Found binary: $($binary.FullName)"
 
       - name: Run Tauri E2E tests
-        run: pnpm run test:e2e:tauri
+        run: npm run test:e2e:tauri
         env:
           CI: 'true'
           TAURI_BINARY: ${{ steps.find-binary.outputs.binary }}
 
       - name: Upload Tauri test report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-tauri-windows
@@ -208,7 +193,7 @@ jobs:
           retention-days: 7
 
       - name: Upload Tauri test results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: test-results-tauri-windows
