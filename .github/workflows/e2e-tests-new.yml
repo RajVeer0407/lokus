@@ -53,6 +53,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Build tauri-playwright-helpers
+        run: npm run build --workspace=tauri-playwright-helpers
+
       - name: Build frontend
         run: npm run bundle:mcp && npm run build
 
@@ -111,6 +114,9 @@ jobs:
 
       - name: Install Node dependencies
         run: npm ci
+
+      - name: Build tauri-playwright-helpers
+        run: npm run build --workspace=tauri-playwright-helpers
 
       - name: Build frontend
         run: npm run bundle:mcp && npm run build
