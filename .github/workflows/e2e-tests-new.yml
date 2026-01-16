@@ -52,11 +52,14 @@ jobs:
       - name: Run Tauri E2E tests
         run: |
           source $HOME/.cargo/env
-          xvfb-run --auto-servernum npm run test:e2e:tauri
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" npm run test:e2e:tauri
         env:
           CI: 'true'
           TAURI_BINARY: ./src-tauri/target/debug/lokus
           DISPLAY: ':99'
+          # Force software rendering for VM without GPU
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          WEBKIT_DISABLE_COMPOSITING_MODE: '1'
 
       - name: Upload Tauri test report
         uses: actions/upload-artifact@v4
