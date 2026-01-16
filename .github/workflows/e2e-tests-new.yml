@@ -12,43 +12,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Real Tauri E2E tests (actual binary) - Linux
-  e2e-tauri-linux:
-    name: E2E Tauri Tests (Linux)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+  e2e-tauri:
+    name: E2E Tauri Tests (Self-Hosted Linux)
+    runs-on: [self-hosted, linux, lokus-e2e]
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Install Linux dependencies
+      - name: Clean previous builds
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            webkit2gtk-driver \
-            xvfb
-
-      - name: Install tauri-driver
-        run: cargo install tauri-driver
+          # Clean old artifacts to save disk space
+          rm -rf node_modules/.cache
+          rm -rf src-tauri/target/debug/build
+          rm -rf src-tauri/target/debug/deps
+          rm -rf src-tauri/target/debug/incremental
+          rm -rf playwright-report-tauri
+          rm -rf test-results-tauri
+          # Keep only the last log file
+          find . -name "*.log" -type f -mmin +60 -delete 2>/dev/null || true
 
       - name: Install Node dependencies
         run: npm ci
@@ -65,93 +48,43 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ''
 
       - name: Run Tauri E2E tests
-        uses: coactions/setup-xvfb@v1
-        with:
-          run: npm run test:e2e:tauri
+        run: xvfb-run --auto-servernum npm run test:e2e:tauri
         env:
           CI: 'true'
           TAURI_BINARY: ./src-tauri/target/debug/lokus
+          DISPLAY: ':99'
 
       - name: Upload Tauri test report
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report-tauri-linux
+          name: playwright-report-tauri
           path: playwright-report-tauri/
-          retention-days: 7
+          retention-days: 3
 
       - name: Upload Tauri test results
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: test-results-tauri-linux
+          name: test-results-tauri
           path: test-results-tauri/
-          retention-days: 7
+          retention-days: 3
 
-  # Real Tauri E2E tests - Windows
-  e2e-tauri-windows:
-    name: E2E Tauri Tests (Windows)
-    runs-on: windows-latest
-    timeout-minutes: 45
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: Build tauri-playwright-helpers
-        run: npm run build --workspace=tauri-playwright-helpers
-
-      - name: Build frontend
-        run: npm run bundle:mcp && npm run build
-
-      - name: Build Tauri binary (debug, no bundling)
-        run: cargo build --manifest-path src-tauri/Cargo.toml
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ''
-
-      - name: Run Tauri E2E tests
-        run: npm run test:e2e:tauri
-        env:
-          CI: 'true'
-          TAURI_BINARY: ./src-tauri/target/debug/lokus.exe
-
-      - name: Upload Tauri test report
-        uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-report-tauri-windows
-          path: playwright-report-tauri/
-          retention-days: 7
-
-      - name: Upload Tauri test results
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: test-results-tauri-windows
-          path: test-results-tauri/
-          retention-days: 7
+      - name: Cleanup after run
+        if: always()
+        run: |
+          # Clean build artifacts to save disk space
+          rm -rf src-tauri/target/debug/build
+          rm -rf src-tauri/target/debug/deps
+          rm -rf src-tauri/target/debug/incremental
+          # Keep the binary for caching but clean intermediate files
+          find src-tauri/target -name "*.rlib" -delete 2>/dev/null || true
+          find src-tauri/target -name "*.rmeta" -delete 2>/dev/null || true
 
   summary:
     name: Test Summary
-    needs: [e2e-tauri-linux, e2e-tauri-windows]
-    runs-on: ubuntu-latest
+    needs: [e2e-tauri]
+    runs-on: [self-hosted, linux, lokus-e2e]
     if: always()
 
     steps:
@@ -162,20 +95,12 @@ jobs:
           echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ needs.e2e-tauri-linux.result }}" == "success" ]; then
-            echo "| Linux | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.e2e-tauri-linux.result }}" == "failure" ]; then
-            echo "| Linux | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.e2e-tauri.result }}" == "success" ]; then
+            echo "| Linux (Self-Hosted) | Passed |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.e2e-tauri.result }}" == "failure" ]; then
+            echo "| Linux (Self-Hosted) | Failed |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Linux | ⏭️ ${{ needs.e2e-tauri-linux.result }} |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ "${{ needs.e2e-tauri-windows.result }}" == "success" ]; then
-            echo "| Windows | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.e2e-tauri-windows.result }}" == "failure" ]; then
-            echo "| Windows | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Windows | ⏭️ ${{ needs.e2e-tauri-windows.result }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Linux (Self-Hosted) | ${{ needs.e2e-tauri.result }} |" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
