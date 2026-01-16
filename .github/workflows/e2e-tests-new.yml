@@ -43,12 +43,16 @@ jobs:
         run: npm run bundle:mcp && npm run build
 
       - name: Build Tauri binary (debug, no bundling)
-        run: cargo build --manifest-path src-tauri/Cargo.toml
+        run: |
+          source $HOME/.cargo/env
+          cargo build --manifest-path src-tauri/Cargo.toml
         env:
           TAURI_SIGNING_PRIVATE_KEY: ''
 
       - name: Run Tauri E2E tests
-        run: xvfb-run --auto-servernum npm run test:e2e:tauri
+        run: |
+          source $HOME/.cargo/env
+          xvfb-run --auto-servernum npm run test:e2e:tauri
         env:
           CI: 'true'
           TAURI_BINARY: ./src-tauri/target/debug/lokus
